@@ -23,7 +23,7 @@ class administerusersbyrole_handler_field_user_link_edit extends views_handler_f
       $text = !empty($this->options['text']) ? $this->options['text'] : t('edit');
 
       $this->options['alter']['path'] = "user/$data/edit";
-      $this->options['alter']['query'] = drupal_get_destination();
+      $this->options['alter']['query'] = backdrop_get_destination();
 
       return $text;
     }

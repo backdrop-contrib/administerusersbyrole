@@ -14,3 +14,12 @@ function administerusersbyrole_views_data_alter(&$data) {
   $data['users']['edit_node']['field']['handler'] = 'administerusersbyrole_handler_field_user_link_edit';
   $data['users']['cancel_node']['field']['handler'] = 'administerusersbyrole_handler_field_user_link_cancel';
 }
+
+/**
+ * Implements hook_views_query_alter().
+ */
+function administerusersbyrole_views_query_alter(&$view, &$query) {
+  if ($view->name == 'user_admin') {
+    $query->tags[] = 'administerusersbyrole_edit_access';
+  }
+}

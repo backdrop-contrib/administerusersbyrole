@@ -1,0 +1,5 @@
+[AdministerUsersByRoleTestCase]
+name = Administer Users by Role
+description = Ensure that Administer Users by Role functions properly.
+group = Administer Users by Role
+file = administerusersbyrole.test

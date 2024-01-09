@@ -6,7 +6,7 @@
  *
  * This module allows site builders to set up fine-grained permissions for
  * allowing users to edit and cancel other users:  more specific than
- * Drupal Core's all-or-nothing 'administer users' permission.  It also
+ * Backdrop Core's all-or-nothing 'administer users' permission.  It also
  * provides and enforces a 'create users' permission.
  */
 
@@ -17,34 +17,54 @@ function administerusersbyrole_permission() {
   $roles = user_roles(TRUE);
   // Exclude the admin role.  Once you can edit an admin, you can set their password, log in and do anything,
   // which defeats the point of using this module.
-  $admin_rid = variable_get('user_admin_role', 0);
-  $perms = array();
-  $perms['create users'] = array('title' => 'Create new users');
-  $perms['access users overview'] = array('title' => 'Access the users overview page');
-  $ops = array('edit' => t('edit'), 'cancel' => t('cancel'));
+  $admin_role = config_get('system.core', 'user_admin_role');
 
-  foreach ($roles as $rid => $role) {
-    if ($rid == $admin_rid) {
+  $permissions['create users'] = array(
+    'title' => t('Create new users'),
+    'description' => t('Allows people to create user accounts.'),
+  );
+  $permissions['access users overview'] = array(
+    'title' => t('Access the users overview page'),
+    'description' => t('Allows people to view the users administration page.'),
+  );
+
+  $ops = array(
+    'edit' => t('edit'),
+    'cancel' => t('cancel')
+  );
+
+  foreach ($roles as $role => $role_label) {
+    if ($role == $admin_role) {
       continue;
     }
 
     foreach ($ops as $op => $operation) {
-      $perm_string = _administerusersbyrole_build_perm_string($rid, $op);
-      if ($rid === DRUPAL_AUTHENTICATED_RID) {
-        $perm_title = drupal_ucfirst(t("@operation users with no custom roles", array(
+      $perm_string = _administerusersbyrole_build_perm_string($role, $op);
+      if ($role === BACKDROP_AUTHENTICATED_ROLE) {
+        $perm_title = backdrop_ucfirst(t("@operation users with no custom roles", array(
           '@operation' => $operation,
         )));
       }
       else {
-        $perm_title = drupal_ucfirst(t("@operation users with role %role", array(
+        $perm_title = backdrop_ucfirst(t("@operation users with role %role", array(
           '@operation' => $operation,
-          '%role' => $role,
+          '%role' => $role_label,
         )));
       }
-      $perms[$perm_string] = array('title' => $perm_title);
+      $permissions[$perm_string] = array('title' => $perm_title);
     }
   }
-  return $perms;
+  return $permissions;
+}
+
+/**
+ * Implements hook_autoload_info().
+ */
+function administerusersbyrole_autoload_info() {
+  return array(
+    'administerusersbyrole_handler_field_user_link_edit' => 'views/administerusersbyrole_handler_field_user_link_edit.inc',
+    'administerusersbyrole_handler_field_user_link_cancel' => 'views/administerusersbyrole_handler_field_user_link_cancel.inc',
+  );
 }
 
 /**
@@ -56,6 +76,7 @@ function administerusersbyrole_menu_alter(&$items) {
   if (!module_exists('chain_menu_access')) {
     return;
   }
+
   chain_menu_access_chain($items, 'user/%user', '_administerusersbyrole_check_access', array(1, 'edit'), TRUE);
   chain_menu_access_chain($items, 'user/%user/edit', '_administerusersbyrole_check_access', array(1, 'edit'), TRUE);
   chain_menu_access_chain($items, 'user/%user/cancel', '_administerusersbyrole_check_access', array(1, 'cancel'), TRUE);
@@ -76,7 +97,7 @@ function administerusersbyrole_menu_alter(&$items) {
 /**
  * Implements hook_module_implements_alter().
  *
- * We need to be after the call from the entity module so our hook takes precedence.
+ * We need to be after the "entity_info_alter" call so our hook takes precedence.
  */
 function administerusersbyrole_module_implements_alter(&$implementations, $hook) {
   if ($hook == 'entity_info_alter') {
@@ -84,17 +105,6 @@ function administerusersbyrole_module_implements_alter(&$implementations, $hook)
     $group = $implementations['administerusersbyrole'];
     unset($implementations['administerusersbyrole']);
     $implementations['administerusersbyrole'] = $group;
-  }
-}
-
-/**
- * Implements hook_views_default_views_alter().
- */
-function administerusersbyrole_views_default_views_alter(&$views) {
-  if (isset($views['admin_views_user'])) {
-    // Add a tag to the admin_views module users view.
-    $handler =& $views['admin_views_user']->display['default']->handler;
-    $handler->display->display_options['query']['options']['query_tags'] = array('administerusersbyrole_edit_access');
   }
 }
 
@@ -108,27 +118,33 @@ function administerusersbyrole_query_alter(QueryAlterableInterface $query) {
     $query->condition('users.uid', 1, '<>');
 
     $roles = user_roles(TRUE);
-    foreach ($roles as $rid => $role) {
-      if (!user_access(_administerusersbyrole_build_perm_string($rid, 'edit'))) {
-        $exclude[$rid] = $rid;
+    foreach ($roles as $role => $role_label) {
+      if (!user_access(_administerusersbyrole_build_perm_string($role, 'edit'))) {
+        $exclude[$role] = $role;
       }
     }
 
-    if (isset($exclude[DRUPAL_AUTHENTICATED_RID])) {
+    if (isset($exclude[BACKDROP_AUTHENTICATED_ROLE])) {
       // No permission unless there is a role.
       $query->join('users_roles', 'users_roles_2', 'users_roles_2.uid=users.uid');
-      unset($exclude[DRUPAL_AUTHENTICATED_RID]);
+      unset($exclude[BACKDROP_AUTHENTICATED_ROLE]);
     }
 
     // Do an "anti-join" on the excluded roles - add a left join and then check the results set is null.
     // NB We don't have to check that $exclude might be empty, because it always contains the admin role.
-    $urAlias = $query->leftjoin('users_roles', 'ur', 'ur.uid=users.uid AND ur.rid IN (:exclude)', array(':exclude' => $exclude));
+    $urAlias = $query->leftjoin('users_roles', 'ur', 'ur.uid=users.uid AND ur.role IN (:exclude)', array(':exclude' => $exclude));
     $query->isNull("$urAlias.uid");
   }
 }
 
 /**
  * Determine access to create user accounts.
+ *
+ * @param string $extra
+ *   Contains "elevate" if user needs temporary administer users access.
+ *
+ * @return bool
+ *   TRUE if user can create user accounts, FALSE otherwise.
  */
 function _administerusersbyrole_can_create_users($extra = '') {
   if (user_access('create users')) {
@@ -143,6 +159,11 @@ function _administerusersbyrole_can_create_users($extra = '') {
 /**
  * Wrapper function for the cancel confirm form that first elevates to 'administer users' permission
  * if required.
+ *
+ * @param User $account
+ *
+ * @return array
+ *   Form array for the cancel confirm form.
  */
 function administerusersbyrole_cancel_confirm_wrapper($account) {
   // If we are granting permissions, elevate to 'administer users'.
@@ -151,7 +172,7 @@ function administerusersbyrole_cancel_confirm_wrapper($account) {
     _administerusersbyrole_temp_administer_users();
   }
 
-  return(drupal_get_form('user_cancel_confirm_form', $account));
+  return(backdrop_get_form('user_cancel_confirm_form', $account));
 }
 
 /**
@@ -190,14 +211,14 @@ function administerusersbyrole_form_user_multiple_cancel_confirm_alter(&$form, &
       $anyallowed = TRUE;
     }
     else {
-      drupal_set_message(t('You do not have permission to cancel %user.', array('%user' => $account->name)), 'error');
+      backdrop_set_message(t('You do not have permission to cancel %user.', array('%user' => $account->name)), 'error');
       unset($form_state['input']['accounts'][$uid]);
       unset($form['accounts'][$uid]);
     }
   }
 
   if (!$anyallowed) {
-    drupal_goto(drupal_substr($form['#action'], 1));
+    backdrop_goto(backdrop_substr($form['#action'], 1));
   }
 }
 
@@ -210,7 +231,7 @@ function administerusersbyrole_form_user_profile_form_alter(&$form, &$form_state
   $account = $form['#user'];
 
   // We just check against this module's own permissions.
-  // Don't check against the permissions in Drupal core, as those checks have already done and are subtle.
+  // Don't check against the permissions in Backdrop core, as those checks have already done and are subtle.
   // (For example, users can't necesarily change their own username and can't block their own account.)
 
   if (_administerusersbyrole_check_access($account, 'edit')) {
@@ -261,16 +282,20 @@ function administerusersbyrole_entity_property_info_alter(&$info) {
 /**
  * Access callback for the user entity.
  *
- * NB the names of variables here are deliberately different from the ones used in the entity module.
- * The reason is to be consistent with the rest of this module.  In the entity module:
- * - Parameter 2 is named '$entity'.  Entity is a user account, which is referred to as $account
- *   throughout in this module, so we stick with that.
- * - Parameter 3 is named '$account', meaning the account to check as, which is referred to as $check_as
- *   in this module.
+ * @param string $op
+ *   The operation
+ * @param User $account
+ *   The entity that is being accessed.
+ * @param User|null $check_as
+ *   The account that is attempting to access the entity.
+ *
+ * The names of variables here are deliberately different from the ones used in
+ * the entity_plus module. The reason is to be consistent with the rest of this
+ * module.
  */
 function administerusersbyrole_metadata_user_access($op, $account = NULL, $check_as = NULL) {
   // Call the base function.
-  if (entity_metadata_user_access($op, $account, $check_as)) {
+  if (entity_plus_metadata_user_access($op, $account, $check_as)) {
     return TRUE;
   }
 
@@ -287,10 +312,19 @@ function administerusersbyrole_metadata_user_access($op, $account = NULL, $check
 
 /**
  * Access callback for user entity properties.
+ *
+ * @param string $op
+ *   The operation
+ * @param mixed $property
+ *   A property of the entity.
+ * @param User|null $account
+ *   The entity that is being accessed. (optional)
+ * @param User|null $check_as
+ *   The account that is attempting to access the entity. (optional)
  */
 function administerusersbyrole_metadata_user_properties_access($op, $property, $account = NULL, $check_as = NULL) {
   // Call the base function.
-  if (entity_metadata_user_properties_access($op, $property, $account, $check_as)) {
+  if (entity_plus_metadata_user_properties_access($op, $property, $account, $check_as)) {
     return TRUE;
   }
 
@@ -302,7 +336,14 @@ function administerusersbyrole_metadata_user_properties_access($op, $property, $
  * Check access to perform an operation on an account.
  *
  * This function checks the permissions of this module only.  The calling code needs
- * to check any Drupal core permissions that should also allow access.
+ * to check any Backdrop core permissions that should also allow access.
+ *
+ * @param User $account
+ *   The User object that is being checked.
+ * @param string $op
+ *   The operation.
+ * @param User|null $check_as
+ *   The User who may or may not have access to the account.
  */
 function _administerusersbyrole_check_access($account, $op, $check_as = NULL) {
   // Never allow uid 0 (anonymous) or 1 (master admin).
@@ -316,12 +357,12 @@ function _administerusersbyrole_check_access($account, $op, $check_as = NULL) {
     $account = user_load($account->uid);
   }
 
-  foreach ($account->roles as $rid => $role) {
-    // If there is only DRUPAL_AUTHENTICATED_RID, then we must test for it, otherwise skip it.
-    if (($rid === DRUPAL_AUTHENTICATED_RID) && (count($account->roles) > 1)) {
+  foreach ($account->roles as $role) {
+    // If there is only BACKDROP_AUTHENTICATED_ROLE, then we must test for it, otherwise skip it.
+    if (($role === BACKDROP_AUTHENTICATED_ROLE) && (count($account->roles) > 1)) {
       continue;
     }
-    if (!user_access(_administerusersbyrole_build_perm_string($rid, $op), $check_as)) {
+    if (!user_access(_administerusersbyrole_build_perm_string($role, $op), $check_as)) {
       return FALSE;
     }
   }
@@ -331,6 +372,14 @@ function _administerusersbyrole_check_access($account, $op, $check_as = NULL) {
 
 /**
  * Generates a permission string for a given a role.
+ *
+ * @param string $role_id
+ *   The role machine name.
+ * @param string $op
+ *   The operation, defaults to edit.
+ *
+ * @return string
+ *   The permission key.
  */
 function _administerusersbyrole_build_perm_string($role_id, $op = 'edit') {
   $perm = "$op users with role $role_id";
@@ -338,12 +387,12 @@ function _administerusersbyrole_build_perm_string($role_id, $op = 'edit') {
 }
 
 /**
- * Temporarily override 'administer users' for the duration or processing this page.
+ * Temporarily override 'administer users' for the duration of processing this page.
  */
 function _administerusersbyrole_temp_administer_users() {
   global $user;
-  $static = &drupal_static('user_access');
-  $static[$user->uid]['administer users'] = TRUE;
+  $static = &backdrop_static('user_access');
+  $static[$user->uid][] = 'administer users';
 }
 
 /**
@@ -352,6 +401,6 @@ function _administerusersbyrole_temp_administer_users() {
 function administerusersbyrole_views_api() {
   return array(
     'api' => 3,
-    'path' => drupal_get_path('module', 'administerusersbyrole') . '/views',
+    'path' => backdrop_get_path('module', 'administerusersbyrole') . '/views',
   );
 }

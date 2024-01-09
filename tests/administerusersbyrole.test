@@ -5,14 +5,7 @@
  * Test Administer Users by Role.
  */
 
-class AdministerUsersByRoleTestCase extends DrupalWebTestCase {
-  public static function getInfo() {
-    return array(
-      'name' => 'administerusersbyrole',
-      'description' => 'Ensure that Administer Users by Role functions properly.',
-      'group' => 'Administer Users by Role',
-    );
-  }
+class AdministerUsersByRoleTestCase extends BackdropWebTestCase {
 
   private $roles = array();
   private $users = array();
@@ -36,7 +29,7 @@ class AdministerUsersByRoleTestCase extends DrupalWebTestCase {
 
   private function createRolesAndUsers($roleName, $allowEditorToCancel) {
     // create basic role
-    $this->roles[$roleName] = $this->drupalCreateRole(array('access content'), $roleName);
+    $this->roles[$roleName] = $this->backdropCreateRole(array('access content'), $roleName);
     $this->createUserWithRole($roleName, array($roleName));
 
     // clear permissions cache, so we can use the 'edit users with ...' permission for this role
@@ -44,14 +37,14 @@ class AdministerUsersByRoleTestCase extends DrupalWebTestCase {
     // create role to edit above role and also anyone with no custom roles.
     $perms = array(
       'access content',
-      _administerusersbyrole_build_perm_string(DRUPAL_AUTHENTICATED_RID, 'edit'),
+      _administerusersbyrole_build_perm_string(BACKDROP_AUTHENTICATED_ROLE, 'edit'),
       _administerusersbyrole_build_perm_string($this->roles[$roleName], 'edit'),
     );
     if ($allowEditorToCancel) {
       // Don't add in "no custom roles" this time, to give better variety of testing.
       $perms[] = _administerusersbyrole_build_perm_string($this->roles[$roleName], 'cancel');
     }
-    $this->roles["{$roleName}_editor"] = $this->drupalCreateRole($perms, "{$roleName}_editor");
+    $this->roles["{$roleName}_editor"] = $this->backdropCreateRole($perms, "{$roleName}_editor");
     $this->createUserWithRole("{$roleName}_editor", array("{$roleName}_editor"));
   }
 
@@ -75,31 +68,31 @@ class AdministerUsersByRoleTestCase extends DrupalWebTestCase {
       _administerusersbyrole_build_perm_string($this->roles['beta'], 'edit'),
     );
     $this->checkPermissions(array(), TRUE);
-    $this->roles['alphabeta_ed'] = $this->drupalCreateRole($perms, 'alphabeta_ed');
+    $this->roles['alphabeta_ed'] = $this->backdropCreateRole($perms, 'alphabeta_ed');
     $this->createUserWithRole('alphabeta_ed', array('alphabeta_ed'));
 
     // all_editor
     $perms = array(
       'access content',
-      _administerusersbyrole_build_perm_string(DRUPAL_AUTHENTICATED_RID, 'edit'),
+      _administerusersbyrole_build_perm_string(BACKDROP_AUTHENTICATED_ROLE, 'edit'),
     );
     foreach ($this->roles as $roleName => $roleID) {
       $perms[] = _administerusersbyrole_build_perm_string($this->roles[$roleName], 'edit');
     }
     $this->checkPermissions(array(), TRUE);
-    $this->roles['all_editor'] = $this->drupalCreateRole($perms, 'all_editor');
+    $this->roles['all_editor'] = $this->backdropCreateRole($perms, 'all_editor');
     $this->createUserWithRole('all_editor', array('all_editor'));
 
     // all_deletor
     $perms = array(
       'access content',
-      _administerusersbyrole_build_perm_string(DRUPAL_AUTHENTICATED_RID, 'cancel'),
+      _administerusersbyrole_build_perm_string(BACKDROP_AUTHENTICATED_ROLE, 'cancel'),
     );
     foreach ($this->roles as $roleName => $roleID) {
       $perms[] = _administerusersbyrole_build_perm_string($roleID, 'cancel');
     }
     $this->checkPermissions(array(), TRUE);
-    $this->roles['all_deletor'] = $this->drupalCreateRole($perms, 'all_deletor');
+    $this->roles['all_deletor'] = $this->backdropCreateRole($perms, 'all_deletor');
     $this->createUserWithRole('all_deletor', array('all_deletor'));
 
     // creator
@@ -108,7 +101,7 @@ class AdministerUsersByRoleTestCase extends DrupalWebTestCase {
       'create users',
     );
     $this->checkPermissions(array(), TRUE);
-    $this->roles['creator'] = $this->drupalCreateRole($perms, 'creator');
+    $this->roles['creator'] = $this->backdropCreateRole($perms, 'creator');
     $this->createUserWithRole('creator', array('creator'));
   }
 
@@ -263,12 +256,12 @@ class AdministerUsersByRoleTestCase extends DrupalWebTestCase {
 
     foreach ($expectations as $loginUsername => $editUsernames) {
       if ($loginUsername !== 'nobody') {
-        $this->drupalLogin($this->users[$loginUsername]);
+        $this->backdropLogin($this->users[$loginUsername]);
       }
 
       foreach ($editUsernames as $k => $v) {
         if ($k === 'create users') {
-          $this->drupalGet("admin/people/create");
+          $this->backdropGet("admin/people/create");
           $expectedResult = $v;
           if ($expectedResult) {
             $this->assertRaw('This web page allows administrators to register new users.', "My expectation is that $loginUsername should be able to create users, but it can't.");
@@ -282,7 +275,7 @@ class AdministerUsersByRoleTestCase extends DrupalWebTestCase {
           $operations = $v;
           $editUid = $this->users[$editUsername]->uid;
           foreach ($operations as $operation => $expectedResult) {
-            $this->drupalGet("user/$editUid/$operation");
+            $this->backdropGet("user/$editUid/$operation");
             if ($expectedResult) {
               if ($operation === 'edit') {
                 $this->assertRaw("All e-mails from the system will be sent to this address.", "My expectation is that $loginUsername should be able to $operation $editUsername, but it can't.");
@@ -293,8 +286,8 @@ class AdministerUsersByRoleTestCase extends DrupalWebTestCase {
             }
             else {
               $this->assertTrue(
-                strstr($this->drupalGetContent(), "You do not have permission to $operation <em class=\"placeholder\">$editUsername</em>.")
-                || strstr($this->drupalGetContent(), 'You are not authorized to access this page.'),
+                strstr($this->backdropGetContent(), "You do not have permission to $operation <em class=\"placeholder\">$editUsername</em>.")
+                || strstr($this->backdropGetContent(), 'You are not authorized to access this page.'),
                 "My expectation is that $loginUsername shouldn't be able to $operation $editUsername, but it can.");
             }
           }
@@ -302,7 +295,7 @@ class AdministerUsersByRoleTestCase extends DrupalWebTestCase {
       }
 
       if ($loginUsername !== 'nobody') {
-        $this->drupalLogout();
+        $this->backdropLogout();
       }
     }
   }

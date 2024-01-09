@@ -26,7 +26,7 @@ class administerusersbyrole_handler_field_user_link_cancel extends views_handler
       $text = !empty($this->options['text']) ? $this->options['text'] : t('Cancel account');
 
       $this->options['alter']['path'] = "user/$uid/cancel";
-      $this->options['alter']['query'] = drupal_get_destination();
+      $this->options['alter']['query'] = backdrop_get_destination();
 
       return $text;
     }
