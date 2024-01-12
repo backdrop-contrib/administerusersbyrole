@@ -4,10 +4,11 @@
  * @file
  * Provides fine-grained permissions for creating, editing, and deleting users.
  *
- * This module allows site builders to set up fine-grained permissions for
- * allowing users to edit and cancel other users:  more specific than
- * Backdrop Core's all-or-nothing 'administer users' permission.  It also
- * provides and enforces a 'create users' permission.
+ * Allows site builders to set up fine-grained permissions for editing and
+ * deleting user accounts by role, and a separate permission for creating user
+ * accounts. It is more specific than Backdrop Core's all-or-nothing
+ * 'administer users' permission, so site builders can set up "sub-admins" with
+ * permission to specific roles.
  */
 
 /**

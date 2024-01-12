@@ -22,7 +22,15 @@ class AdministerUsersByRoleTestCase extends BackdropWebTestCase {
       'roles' => $roleIDs,
       'status' => 1,
     );
-    $this->users[$userName] = user_save(NULL, $userInfo);
+    $user = entity_create('user', array(
+      'name' => $userName,
+      'mail' => "$userName@example.com",
+      'pass' => 'cheese',
+      'roles' => $roleIDs,
+      'status' => 1,
+    ));
+    $user->save();
+    $this->users[$userName] = $user;
     $this->users[$userName]->pass_raw = 'cheese';
     $this->assertTrue($this->users[$userName]->uid > 0, "Unable to create user $userName.");
   }
@@ -264,7 +272,7 @@ class AdministerUsersByRoleTestCase extends BackdropWebTestCase {
           $this->backdropGet("admin/people/create");
           $expectedResult = $v;
           if ($expectedResult) {
-            $this->assertRaw('This web page allows administrators to register new users.', "My expectation is that $loginUsername should be able to create users, but it can't.");
+            $this->assertRaw('Add user account', "My expectation is that $loginUsername should be able to create users, but it can't.");
           }
           else {
             $this->assertRaw('You are not authorized to access this page.', "My expectation is that $loginUsername shouldn't be able to create users, but it can.");
@@ -278,7 +286,7 @@ class AdministerUsersByRoleTestCase extends BackdropWebTestCase {
             $this->backdropGet("user/$editUid/$operation");
             if ($expectedResult) {
               if ($operation === 'edit') {
-                $this->assertRaw("All e-mails from the system will be sent to this address.", "My expectation is that $loginUsername should be able to $operation $editUsername, but it can't.");
+                $this->assertRaw("All emails from the system will be sent to this address.", "My expectation is that $loginUsername should be able to $operation $editUsername, but it can't.");
               }
               elseif ($operation === 'cancel') {
                 $this->assertRaw("Are you sure you want to cancel the account <em class=\"placeholder\">$editUsername</em>?", "My expectation is that $loginUsername should be able to $operation $editUsername, but it can't.");
